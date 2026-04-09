@@ -9,10 +9,25 @@ import random
 st.set_page_config(page_title="Family Rules & Shop", layout="centered")
 st.title("🏆 우리 집 규칙 상점")
 
-# --- 응원 문구 리스트 (사이트 접속 시마다 랜덤 선택) ---
+# --- 응원 문구 리스트 (아빠가 주신 문구 대폭 반영!) ---
 if 'm_msg' not in st.session_state:
-    m_list = ["모건, 오늘도 멋지게 지켜보자!", "모건, 넌 할 수 있어!", "오늘도 차곡차곡 점수를 쌓아볼까?", "모건의 멋진 하루를 응원해!", "모건, 규칙 지키기 대장!"]
-    h_list = ["모하, 즐겁게 시작해볼까?", "모하, 오늘도 화이팅!", "웃음 가득한 모하의 하루!", "작은 규칙부터 하나씩 지켜보자!", "모하, 오늘도 응원해!"]
+    # 공통으로 들어갈 사랑의 메시지
+    love_msgs = [
+        "사랑해", "너무 사랑해", "오늘도 할수 있어!", 
+        "난 멋지니깐!", "규칙을 잘지키자!", 
+        "우리집은 내가 지킨다!", "스스로 하는 멋진 나!"
+    ]
+    
+    # 모건 전용 리스트
+    m_list = [f"모건, {msg}" for msg in love_msgs] + [
+        "모건, 오늘도 멋지게 지켜보자!", "모건, 넌 할 수 있어!", "모건의 멋진 하루를 응원해!"
+    ]
+    
+    # 모하 전용 리스트
+    h_list = [f"모하, {msg}" for msg in love_msgs] + [
+        "모하, 즐겁게 시작해볼까?", "모하, 오늘도 화이팅!", "모하, 오늘도 응원해!"
+    ]
+    
     st.session_state.m_msg = random.choice(m_list)
     st.session_state.h_msg = random.choice(h_list)
 
@@ -35,7 +50,7 @@ try:
     history_df = pd.DataFrame(history_sheet.get_all_records())
     rewards_df = pd.DataFrame(rewards_sheet.get_all_records())
 
-    # 데이터 정제
+    # 데이터 정제 (이름 두 글자 통일)
     today_str = datetime.now().strftime("%Y-%m-%d")
     if not history_df.empty:
         history_df['이름'] = history_df['이름'].astype(str).str.replace("김", "").str.strip()
@@ -79,36 +94,32 @@ try:
 
     # [TAB 1: 규칙 지키기]
     with tab1:
-        # 랜덤 문구 표시
+        # 모건 응원 문구
         if check_today_complete("모건"): st.success("✨ 모건 오늘 미션 10개 완료! 대단해! ✨")
         else: st.subheader(st.session_state.m_msg)
 
+        # 모하 응원 문구
         if check_today_complete("모하"): st.success("✨ 모하 오늘 미션 10개 완료! 최고야! ✨")
         else: st.subheader(st.session_state.h_msg)
 
         for i, row in rules_df.iterrows():
             if not row.get('규칙명'): continue
             
-            # --- 오늘 이미 이 규칙을 수행했는지 체크 ---
-            m_already_done = False
-            h_already_done = False
-            if not history_df.empty:
-                m_already_done = not history_df[(history_df['이름'] == "모건") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])].empty
-                h_already_done = not history_df[(history_df['이름'] == "모하") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])].empty
+            # 오늘 이미 수행했는지 체크
+            m_done = not history_df[(history_df['이름'] == "모건") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])].empty if not history_df.empty else False
+            h_done = not history_df[(history_df['이름'] == "모하") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])].empty if not history_df.empty else False
 
             with st.expander(row['규칙명']):
                 c1, c2, c3, c4 = st.columns(4)
                 
-                # 모건 버튼 (오늘 완료했으면 disabled)
-                if c1.button("모건✅" if not m_already_done else "모건 완료", key=f"m_r_{i}", disabled=m_already_done):
+                if c1.button("모건✅" if not m_done else "완료", key=f"m_r_{i}", disabled=m_done):
                     save_log("모건", row['상점'], row['규칙명'])
-                if c2.button("모건❌" if not m_already_done else "모건 완료", key=f"m_f_{i}", disabled=m_already_done):
+                if c2.button("모건❌" if not m_done else "완료", key=f"m_f_{i}", disabled=m_done):
                     save_log("모건", -row['벌점'], row['규칙명'])
                 
-                # 모하 버튼 (오늘 완료했으면 disabled)
-                if c3.button("모하✅" if not h_already_done else "모하 완료", key=f"h_r_{i}", disabled=h_already_done):
+                if c3.button("모하✅" if not h_done else "완료", key=f"h_r_{i}", disabled=h_done):
                     save_log("모하", row['상점'], row['규칙명'])
-                if c4.button("모하❌" if not h_already_done else "모하 완료", key=f"h_f_{i}", disabled=h_already_done):
+                if c4.button("모하❌" if not h_done else "완료", key=f"h_f_{i}", disabled=h_done):
                     save_log("모하", -row['벌점'], row['규칙명'])
 
     # [TAB 2: 보상 마켓]
