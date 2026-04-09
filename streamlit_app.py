@@ -7,7 +7,7 @@ import random
 
 # 페이지 설정
 st.set_page_config(page_title="Family Rules & Shop", layout="centered")
-st.title("🏆 우리 집 규칙 상점")
+st.title("🏆 멋진 모건, 모하 연구소!")
 
 # --- 응원 문구 리스트 ---
 if 'm_msg' not in st.session_state:
