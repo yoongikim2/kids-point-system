@@ -1,0 +1,1 @@
+# kids-point-system
