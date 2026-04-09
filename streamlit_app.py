@@ -52,7 +52,7 @@ try:
         history_df['이름'] = history_df['이름'].astype(str).str.replace("김", "").str.strip()
         history_df['날짜'] = history_df['일시'].str[:10]
 
-    # [1] 금메달 계산 로직 (획득한 메달 - 사용한 메달)
+    # 금메달 계산 로직
     def calculate_medals(name):
         if history_df.empty: return 0
         earned = len(history_df[(history_df['이름'] == name) & (history_df['규칙/보상명'] == "🥇 금메달 획득")])
@@ -72,11 +72,9 @@ try:
     # 기록 저장 및 금메달 판별 함수
     def save_log(name, p, r):
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        # 1. 현재 액션 기록
         history_sheet.append_row([name, now, r, int(p)])
         
-        # 2. 금메달 획득 조건 체크 (성공이 10개고 실패가 0개인지)
-        # 새로 고침된 데이터를 가져오기 위해 다시 읽기 (간단한 로직을 위해 append 후 즉시 체크)
+        # 새로 고침된 데이터를 가져오기 위해 다시 읽기
         updated_history = pd.DataFrame(history_sheet.get_all_records())
         updated_history['날짜'] = updated_history['일시'].str[:10]
         
@@ -84,11 +82,9 @@ try:
         success_count = len(today_actions[today_actions['변동 점수'] > 0])
         fail_count = len(today_actions[today_actions['변동 점수'] < 0])
         
-        # 이미 오늘 메달을 받았는지 확인
         already_got_medal = not today_actions[today_actions['규칙/보상명'] == "🥇 금메달 획득"].empty
 
         if success_count == total_rules_count and fail_count == 0 and not already_got_medal:
-            # ★ 금메달 획득! ★
             history_sheet.append_row([name, now, "🥇 금메달 획득", 1])
             st.balloons()
             st.session_state[f'{name}_medal_popup'] = True
@@ -136,7 +132,6 @@ try:
 
     with tab2:
         st.subheader("🥇 금메달로 소원 빌기")
-        # 요청하신 보상 리스트
         reward_items = [
             {"name": "거실에서 자기", "cost": 1},
             {"name": "주말 게임 1시간 이용권", "cost": 1},
@@ -151,6 +146,20 @@ try:
                     save_log("모건", -item['cost'], f"[보상] {item['name']}")
                 if c2.button(f"모하 구매", key=f"rb_h_{idx}", disabled=h_medals < item['cost']):
                     save_log("모하", -item['cost'], f"[보상] {item['name']}")
+
+    # --- 📜 기록판 부활 영역 ---
+    st.divider()
+    st.subheader("📜 오늘 기록")
+    if not history_df.empty:
+        # 오늘 날짜의 기록만 최신순으로 가져오기
+        today_logs = history_df[history_df['날짜'] == today_str][['이름', '일시', '규칙/보상명', '변동 점수']].iloc[::-1]
+        
+        if not today_logs.empty:
+            st.dataframe(today_logs.head(10), use_container_width=True)
+        else:
+            st.info("오늘 아직 기록된 미션이 없어요. 화이팅!")
+    else:
+        st.info("오늘 아직 기록된 미션이 없어요. 화이팅!")
 
 except Exception as e:
     st.error(f"오류: {e}")
