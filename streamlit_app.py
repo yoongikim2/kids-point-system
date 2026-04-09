@@ -2,7 +2,7 @@ import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import random
 
 # 페이지 설정
@@ -19,6 +19,9 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.markdown('<p class="main-title">🌱 모건&모하의 성장 미션!</p>', unsafe_allow_html=True)
+
+# --- 한국 시간(KST) 설정 ---
+KST = timezone(timedelta(hours=9))
 
 # --- 응원 문구 관리 ---
 if 'm_msg' not in st.session_state:
@@ -45,7 +48,9 @@ try:
     history_df = pd.DataFrame(history_sheet.get_all_records())
     
     total_rules_count = len(rules_df) # 총 규칙 개수 (10개)
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    
+    # [수정] 오늘 날짜를 한국 시간 기준으로 구함
+    today_str = datetime.now(KST).strftime("%Y-%m-%d")
 
     # 데이터 정제
     if not history_df.empty:
@@ -62,7 +67,7 @@ try:
     m_medals = calculate_medals("모건")
     h_medals = calculate_medals("모하")
 
-    # 상단 금메달 점수판 (모건👦, 모하🧒 둘 다 멋진 남자아이로 수정!)
+    # 상단 금메달 점수판
     col_m, col_h = st.columns(2)
     col_m.markdown(f"<div class='medal-display'>👦 모건<br>🥇 {m_medals}개</div>", unsafe_allow_html=True)
     col_h.markdown(f"<div class='medal-display'>🧒 모하<br>🥇 {h_medals}개</div>", unsafe_allow_html=True)
@@ -71,7 +76,8 @@ try:
 
     # 기록 저장 및 금메달 판별 함수
     def save_log(name, p, r):
-        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        # [수정] 기록되는 시간도 한국 시간으로!
+        now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
         history_sheet.append_row([name, now, r, int(p)])
         
         updated_history = pd.DataFrame(history_sheet.get_all_records())
@@ -98,7 +104,7 @@ try:
                 st.session_state[f'{kid}_medal_popup'] = False
                 st.rerun()
 
-    # --- 🎨 글씨를 모르는 아이들을 위한 단어 인식 그림 달아주기 ---
+    # 그림(이모티콘) 달아주기
     def get_emoji_for_rule(rule_name):
         name = str(rule_name)
         if "기상" in name or "아침" in name: return "⏰"
@@ -111,7 +117,7 @@ try:
         if "예쁜 말" in name or "이야기" in name: return "💖"
         if "숙제" in name or "공부" in name: return "📚"
         if "잠자기" in name or "밤" in name: return "🌙"
-        return "⭐" # 해당하는 단어가 없으면 기본 별 모양
+        return "⭐"
 
     tab1, tab2 = st.tabs(["🚀 미션", "🎁 보상"])
 
@@ -125,11 +131,9 @@ try:
             m_act = history_df[(history_df['이름'] == "모건") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])] if not history_df.empty else pd.DataFrame()
             h_act = history_df[(history_df['이름'] == "모하") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])] if not history_df.empty else pd.DataFrame()
 
-            # 규칙 제목 앞에 알아서 그림(이모티콘)을 붙여줍니다!
             rule_title_with_emoji = f"{get_emoji_for_rule(row['규칙명'])} {row['규칙명']}"
 
             with st.expander(rule_title_with_emoji):
-                # 모건 (👦)
                 st.write("👦 **모건**")
                 m_c1, m_c2 = st.columns(2)
                 if not m_act.empty:
@@ -138,7 +142,6 @@ try:
                     if m_c1.button("성공", key=f"m_s_{i}"): save_log("모건", 1, row['규칙명'])
                     if m_c2.button("실패", key=f"m_f_{i}"): save_log("모건", -1, row['규칙명'])
                 
-                # 모하 (🧒) - 남자아이 얼굴로 통일!
                 st.write("🧒 **모하**")
                 h_c1, h_c2 = st.columns(2)
                 if not h_act.empty:
