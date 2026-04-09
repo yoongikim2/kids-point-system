@@ -11,7 +11,7 @@ st.title("🏆 우리 집 규칙 상점")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # 데이터 불러오기
-def get_data():
+def get_data(https://docs.google.com/spreadsheets/d/1psSU23KIAOpxwdGaJ67Deaz5XWk3VAkFo0DXM2qsCqA/edit?gid=0#gid=0):
     rules = conn.read(worksheet="규칙")
     history = conn.read(worksheet="기록")
     return rules, history
