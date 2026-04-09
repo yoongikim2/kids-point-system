@@ -8,39 +8,40 @@ import random
 # 페이지 설정
 st.set_page_config(page_title="모건&모하의 성장 미션", layout="centered")
 
-# --- [추가] 모바일 최적화 CSS (글자 크기 조절) ---
+# --- [디자인 수정] 모바일에서 버튼이 안 잘리게 레이아웃 조정 ---
 st.markdown("""
     <style>
-    /* 메인 제목 크기 */
     .main-title {
-        font-size: 26px !important;
+        font-size: 22px !important;
         font-weight: bold;
-        margin-bottom: 5px;
-        padding-top: 0px;
+        margin-bottom: 10px;
     }
-    /* 응원 문구 크기 */
     .msg-text {
-        font-size: 18px !important;
-        margin-bottom: 2px !important;
-        font-weight: 500;
+        font-size: 15px !important;
+        margin-bottom: 3px !important;
     }
-    /* 점수판 크기 살짝 조정 */
-    .stMetric {
-        padding: 5px !important;
+    /* 버튼 간격 및 크기 최적화 */
+    .stButton > button {
+        width: 100% !important;
+        height: 45px !important;
+        font-size: 15px !important;
+        margin-bottom: 5px !important;
+    }
+    /* 여백 줄이기 */
+    .block-container {
+        padding-top: 2rem !important;
+        padding-bottom: 1rem !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 제목 표시 (CSS 적용)
 st.markdown('<p class="main-title">🌱 모건&모하의 규칙 성장 미션!</p>', unsafe_allow_html=True)
 
-# --- 응원 문구 리스트 (이름 누락 방지 수정) ---
+# --- 응원 문구 세션 관리 ---
 if 'm_msg' not in st.session_state:
     love_msgs = ["사랑해", "너무 사랑해", "오늘도 할수 있어!", "난 멋지니깐!", "규칙을 잘지키자!", "우리집은 내가 지킨다!", "스스로 하는 멋진 나!"]
-    # 모든 문구에 이름이 붙도록 확실히 수정
-    m_list = [f"모건, {msg}" for msg in love_msgs] + ["모건, 멋지게 성장 중!", "모건, 넌 정말 훌륭해!", "모건, 오늘도 미션 클리어!"]
-    h_list = [f"모하, {msg}" for msg in love_msgs] + ["모하, 한 걸음씩 쑥쑥!", "모하, 오늘도 빛나는 하루!", "모하, 미션을 즐겁게 해보자!"]
-    
+    m_list = [f"모건, {msg}" for msg in love_msgs] + ["모건, 멋지게 성장 중!", "모건, 넌 정말 훌륭해!"]
+    h_list = [f"모하, {msg}" for msg in love_msgs] + ["모하, 한 걸음씩 쑥쑥!", "모하, 오늘도 빛나는 하루!"]
     st.session_state.m_msg = random.choice(m_list)
     st.session_state.h_msg = random.choice(h_list)
 
@@ -63,107 +64,72 @@ try:
     history_df = pd.DataFrame(history_sheet.get_all_records())
     rewards_df = pd.DataFrame(rewards_sheet.get_all_records())
 
-    # 데이터 정제
     today_str = datetime.now().strftime("%Y-%m-%d")
     if not history_df.empty:
         history_df['이름'] = history_df['이름'].astype(str).str.replace("김", "").str.strip()
         history_df['변동 점수'] = pd.to_numeric(history_df['변동 점수'], errors='coerce').fillna(0)
         history_df['날짜'] = history_df['일시'].str[:10]
 
-    # 누적 점수 계산
-    def calculate_score(name):
-        if not history_df.empty:
-            return int(history_df[history_df['이름'] == name]['변동 점수'].sum())
-        return 0
+    m_score = int(history_df[history_df['이름'] == "모건"]['변동 점수'].sum()) if not history_df.empty else 0
+    h_score = int(history_df[history_df['이름'] == "모하"]['변동 점수'].sum()) if not history_df.empty else 0
 
-    m_score = calculate_score("모건")
-    h_score = calculate_score("모하")
-
-    # 상단 점수판
     col_score1, col_score2 = st.columns(2)
-    col_score1.metric("모건 포인트", f"{m_score}점")
-    col_score2.metric("모하 포인트", f"{h_score}점")
-
-    st.divider()
+    col_score1.metric("모건", f"{m_score}점")
+    col_score2.metric("모하", f"{h_score}점")
 
     def save_log(name, p, r):
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
         history_sheet.append_row([name, now, r, int(p)])
-        st.success(f"미션 기록 완료!")
+        st.success(f"기록 완료!")
         st.rerun()
-
-    def check_today_complete(name):
-        if history_df.empty: return False
-        today_done = history_df[(history_df['이름'] == name) & (history_df['날짜'] == today_str) & (~history_df['규칙/보상명'].str.startswith("[보상]"))]
-        return len(today_done) >= 10
 
     tab1, tab2 = st.tabs(["🚀 미션", "🎁 상점"])
 
-    # [TAB 1: 성장 미션]
     with tab1:
-        # --- 모건 응원 구역 ---
-        if check_today_complete("모건"): 
-            st.success("✨ 모건 오늘 성장 완료! ✨")
-        else: 
-            st.markdown(f'<p class="msg-text">💡 {st.session_state.m_msg}</p>', unsafe_allow_html=True)
-
-        # --- 모하 응원 구역 ---
-        if check_today_complete("모하"): 
-            st.success("✨ 모하 오늘 성장 완료! ✨")
-        else: 
-            st.markdown(f'<p class="msg-text">💡 {st.session_state.h_msg}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="msg-text">💡 {st.session_state.m_msg}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="msg-text">💡 {st.session_state.h_msg}</p>', unsafe_allow_html=True)
 
         for i, row in rules_df.iterrows():
             if not row.get('규칙명'): continue
             
-            def get_status_label(name, rule_name):
-                if history_df.empty: return None
-                record = history_df[(history_df['이름'] == name) & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == rule_name)]
-                if not record.empty:
-                    return "멋져!" if record.iloc[0]['변동 점수'] > 0 else "다음엔!"
-                return None
-
-            m_status = get_status_label("모건", row['규칙명'])
-            h_status = get_status_label("모하", row['규칙명'])
+            # 오늘 수행 여부 체크
+            m_rec = history_df[(history_df['이름'] == "모건") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])] if not history_df.empty else pd.DataFrame()
+            h_rec = history_df[(history_df['이름'] == "모하") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])] if not history_df.empty else pd.DataFrame()
 
             with st.expander(row['규칙명']):
-                c1, c2, c3, c4 = st.columns(4)
-                if m_status:
-                    c1.button(m_status, key=f"m_r_{i}", disabled=True, use_container_width=True)
+                # --- [수정 핵심] 모건/모하 구역을 상하로 나누고, 가로로 2개씩 배치 ---
+                # 1층: 모건
+                st.write("👦 **모건**")
+                m_c1, m_c2 = st.columns(2)
+                if not m_rec.empty:
+                    label = "역시 멋져! ✅" if m_rec.iloc[0]['변동 점수'] > 0 else "다음엔 잘하자! ❌"
+                    m_c1.button(label, key=f"m_done_{i}", disabled=True, use_container_width=True)
                 else:
-                    if c1.button("모건✅", key=f"m_r_{i}"): save_log("모건", row['상점'], row['규칙명'])
-                    if c2.button("모건❌", key=f"m_f_{i}"): save_log("모건", -row['벌점'], row['규칙명'])
+                    if m_c1.button("성공 ✅", key=f"m_s_{i}", use_container_width=True): save_log("모건", row['상점'], row['규칙명'])
+                    if m_c2.button("실패 ❌", key=f"m_f_{i}", use_container_width=True): save_log("모건", -row['벌점'], row['규칙명'])
                 
-                if h_status:
-                    c3.button(h_status, key=f"h_r_{i}", disabled=True, use_container_width=True)
+                st.write("👧 **모하**")
+                h_c1, h_c2 = st.columns(2)
+                if not h_rec.empty:
+                    label = "역시 멋져! ✅" if h_rec.iloc[0]['변동 점수'] > 0 else "다음엔 잘하자! ❌"
+                    h_c1.button(label, key=f"h_done_{i}", disabled=True, use_container_width=True)
                 else:
-                    if c3.button("모하✅", key=f"h_r_{i}"): save_log("모하", row['상점'], row['규칙명'])
-                    if c4.button("모하❌", key=f"h_f_{i}"): save_log("모하", -row['벌점'], row['규칙명'])
+                    if h_c1.button("성공 ✅", key=f"h_s_{i}", use_container_width=True): save_log("모하", row['상점'], row['규칙명'])
+                    if h_c2.button("실패 ❌", key=f"h_f_{i}", use_container_width=True): save_log("모하", -row['벌점'], row['규칙명'])
 
-    # [TAB 2: 보상 상점]
     with tab2:
         st.subheader("🎁 포인트 사용")
         for i, row in rewards_df.iterrows():
             if not row.get('보상명'): continue
             needed = abs(int(row['필요점수']))
             with st.expander(row['보상명']):
-                col_m, col_h = st.columns(2)
-                with col_m:
-                    m_can_buy = m_score >= needed
-                    st.write(f"모건: {m_score}/{needed}")
-                    if st.button(f"구매", key=f"m_p_{i}", disabled=not m_can_buy, use_container_width=True):
-                        save_log("모건", -needed, f"[보상] {row['보상명']}")
-                with col_h:
-                    h_can_buy = h_score >= needed
-                    st.write(f"모하: {h_score}/{needed}")
-                    if st.button(f"구매", key=f"h_p_{i}", disabled=not h_can_buy, use_container_width=True):
-                        save_log("모하", -needed, f"[보상] {row['보상명']}")
-
-    st.divider()
-    if not history_df.empty:
-        st.subheader("📜 오늘 기록")
-        display_df = history_df[history_df['날짜'] == today_str][['이름', '일시', '규칙/보상명', '변동 점수']].iloc[::-1]
-        st.dataframe(display_df.head(5), use_container_width=True)
+                c1, c2 = st.columns(2)
+                m_can = m_score >= needed
+                if c1.button(f"모건({needed}p)", key=f"m_p_{i}", disabled=not m_can, use_container_width=True):
+                    save_log("모건", -needed, f"[보상] {row['보상명']}")
+                h_can = h_score >= needed
+                if c2.button(f"모하({needed}p)", key=f"h_p_{i}", disabled=not h_can, use_container_width=True):
+                    save_log("모하", -needed, f"[보상] {row['보상명']}")
 
 except Exception as e:
     st.error(f"오류: {e}")
