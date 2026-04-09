@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 
 # 페이지 설정
-st.set_page_config(page_title="Family Rules", layout="centered")
+st.set_page_config(page_title="Family Rules & Shop", layout="centered")
 st.title("🏆 우리 집 규칙 상점")
 
 def get_gspread_client():
@@ -21,58 +21,74 @@ try:
     
     rules_sheet = sh.worksheet("rules")
     history_sheet = sh.worksheet("history")
+    rewards_sheet = sh.worksheet("rewards") # 보상 시트 추가
 
-    # 데이터 가져오기
+    # 데이터 불러오기
     rules_df = pd.DataFrame(rules_sheet.get_all_records())
     history_df = pd.DataFrame(history_sheet.get_all_records())
+    rewards_df = pd.DataFrame(rewards_sheet.get_all_records())
 
-    # 1. 점수 계산 (데이터가 없을 때를 대비해 안전하게 처리)
-    m_score = 0
-    h_score = 0
-    
-    # '이름' 칸이 있고 데이터가 있을 때만 계산합니다.
-    if not history_df.empty and '이름' in history_df.columns:
-        history_df['이름'] = history_df['이름'].astype(str).str.strip()
-        history_df['변동 점수'] = pd.to_numeric(history_df['변동 점수'], errors='coerce').fillna(0)
-        
-        m_score = history_df[history_df['이름'] == "김모건"]['변동 점수'].sum()
-        h_score = history_df[history_df['이름'] == "김모하"]['변동 점수'].sum()
+    # 점수 계산 함수
+    def calculate_score(name):
+        if not history_df.empty and '이름' in history_df.columns:
+            tmp_df = history_df.copy()
+            tmp_df['이름'] = tmp_df['이름'].astype(str).str.strip()
+            tmp_df['변동 점수'] = pd.to_numeric(tmp_df['변동 점수'], errors='coerce').fillna(0)
+            return int(tmp_df[tmp_df['이름'] == name]['변동 점수'].sum())
+        return 0
 
+    m_score = calculate_score("김모건")
+    h_score = calculate_score("김모하")
+
+    # 상단 점수판
     col1, col2 = st.columns(2)
-    col1.metric("모건이", f"{int(m_score)}점")
-    col2.metric("모하", f"{int(h_score)}점")
+    col1.metric("모건이 현재 점수", f"{m_score}점")
+    col2.metric("모하 현재 점수", f"{h_score}점")
 
-    st.divider()
+    # 데이터 저장 공통 함수
+    def save_log(name, p, r):
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        history_sheet.append_row([name, now, r, int(p)])
+        st.success(f"'{r}' 완료! ({name}: {p}점)")
+        st.rerun()
 
-    st.subheader("📋 오늘의 규칙 미션")
-    
-    if not rules_df.empty:
+    # --- 탭으로 메뉴 나누기 ---
+    tab1, tab2 = st.tabs(["📋 규칙 지키기", "🎁 보상 마켓"])
+
+    # [TAB 1: 규칙 지키기]
+    with tab1:
+        st.subheader("오늘의 미션 완료!")
         for i, row in rules_df.iterrows():
-            if '규칙명' not in row or not row['규칙명']: continue
-            
-            with st.expander(f"{row['규칙명']} (+{row.get('상점', 0)} / -{row.get('벌점', 0)})"):
-                b1, b2, b3, b4 = st.columns(4)
-                
-                def save_data(name, p, r):
-                    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-                    # [이름, 일시, 규칙/보상명, 변동 점수] 순서로 추가
-                    history_sheet.append_row([name, now, r, int(p)])
-                    st.success(f"{name} 기록 완료!")
-                    st.rerun()
+            if not row.get('규칙명'): continue
+            with st.expander(f"{row['규칙명']} (+{row['상점']}/-{row['벌점']})"):
+                c1, c2, c3, c4 = st.columns(4)
+                if c1.button("모건✅", key=f"m_r_{i}"): save_log("김모건", row['상점'], row['규칙명'])
+                if c2.button("모건❌", key=f"m_f_{i}"): save_log("김모건", -row['벌점'], row['규칙명'])
+                if c3.button("모하✅", key=f"h_r_{i}"): save_log("김모하", row['상점'], row['규칙명'])
+                if c4.button("모하❌", key=f"h_f_{i}"): save_log("김모하", -row['벌점'], row['규칙명'])
 
-                if b1.button("모건✅", key=f"m1_{i}"): save_data("김모건", row.get('상점', 0), row['규칙명'])
-                if b2.button("모건❌", key=f"m2_{i}"): save_data("김모건", -row.get('벌점', 0), row['규칙명'])
-                if b3.button("모하✅", key=f"h1_{i}"): save_data("김모하", row.get('상점', 0), row['규칙명'])
-                if b4.button("모하❌", key=f"h2_{i}"): save_data("김모하", -row.get('벌점', 0), row['규칙명'])
-    else:
-        st.info("rules 시트에 규칙을 입력해 주세요!")
+    # [TAB 2: 보상 마켓]
+    with tab2:
+        st.subheader("모은 점수로 소원 사기")
+        for i, row in rewards_df.iterrows():
+            if not row.get('보상명'): continue
+            with st.expander(f"{row['보상명']} ({row['필요점수']}점 필요)"):
+                c1, c2 = st.columns(2)
+                
+                # 모건이 구매 버튼 (점수 부족하면 비활성화)
+                m_disabled = m_score < row['필요점수']
+                if c1.button(f"모건 구매 {'(부족)' if m_disabled else ''}", key=f"m_p_{i}", disabled=m_disabled):
+                    save_log("김모건", -row['필요점수'], f"[보상] {row['보상명']}")
+                
+                # 모하 구매 버튼
+                h_disabled = h_score < row['필요점수']
+                if c2.button(f"모하 구매 {'(부족)' if h_disabled else ''}", key=f"h_p_{i}", disabled=h_disabled):
+                    save_log("김모하", -row['필요점수'], f"[보상] {row['보상명']}")
 
     st.divider()
-    st.subheader("📜 최근 기록")
-    if not history_df.empty and '이름' in history_df.columns:
-        st.dataframe(history_df.iloc[::-1].head(10), use_container_width=True)
-    else:
-        st.write("아직 기록이 없습니다. 첫 점수를 눌러보세요!")
+    st.subheader("📜 최근 5개 기록")
+    if not history_df.empty:
+        st.dataframe(history_df.iloc[::-1].head(5), use_container_width=True)
 
 except Exception as e:
-    st.error(f"오류 발생: {e}")
+    st.error(f"오류가 발생했어요: {e}")
