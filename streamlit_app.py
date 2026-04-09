@@ -6,7 +6,7 @@ from datetime import datetime
 import random
 
 # 페이지 설정
-st.set_page_config(page_title="모건&모하의 금메달 미션", layout="centered")
+st.set_page_config(page_title="모건&모하의 성장 미션", layout="centered")
 
 # --- 모바일 최적화 CSS ---
 st.markdown("""
