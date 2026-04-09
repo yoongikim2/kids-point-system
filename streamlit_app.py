@@ -22,21 +22,17 @@ try:
     rules_sheet = sh.worksheet("rules")
     history_sheet = sh.worksheet("history")
 
-    # 데이터 가져오기 및 에러 방지 처리
     rules_df = pd.DataFrame(rules_sheet.get_all_records())
     history_df = pd.DataFrame(history_sheet.get_all_records())
 
-    # 숫자가 들어갈 컬럼들을 강제로 숫자로 변환 (빈칸은 0으로 처리)
-    if not rules_df.empty:
-        rules_df['상점'] = pd.to_numeric(rules_df['상점'], errors='coerce').fillna(0)
-        rules_df['벌점'] = pd.to_numeric(rules_df['벌점'], errors='coerce').fillna(0)
-    
+    # 데이터 정제 (이름 앞뒤 공백 제거 및 숫자 변환)
     if not history_df.empty:
+        history_df['이름'] = history_df['이름'].astype(str).str.strip()
         history_df['변동 점수'] = pd.to_numeric(history_df['변동 점수'], errors='coerce').fillna(0)
 
-    # 점수 계산
-    m_score = history_df[history_df['이름'] == "김모건"]['변동 점수'].sum() if not history_df.empty else 0
-    h_score = history_df[history_df['이름'] == "김모하"]['변동 점수'].sum() if not history_df.empty else 0
+    # 1. 점수 계산 (이름이 정확히 일치해야 함)
+    m_score = history_df[history_df['이름'] == "김모건"]['변동 점수'].sum()
+    h_score = history_df[history_df['이름'] == "김모하"]['변동 점수'].sum()
 
     col1, col2 = st.columns(2)
     col1.metric("모건이", f"{int(m_score)}점")
@@ -46,15 +42,16 @@ try:
 
     st.subheader("📋 오늘의 규칙 미션")
     for i, row in rules_df.iterrows():
-        # 규칙명이 비어있는 행은 건너뜁니다
         if not row['규칙명']: continue
         
-        with st.expander(f"{row['규칙명']} (+{int(row['상점'])} / -{int(row['벌점'])})"):
+        with st.expander(f"{row['규칙명']} (+{row['상점']} / -{row['벌점']})"):
             b1, b2, b3, b4 = st.columns(4)
             
+            # 데이터를 넣는 순서를 시트 제목(이름, 일시, 보상명, 변동 점수)에 맞춤
             def save_data(name, p, r):
                 now = datetime.now().strftime("%Y-%m-%d %H:%M")
-                history_sheet.append_row([now, r, int(p), name])
+                # ★ 중요: 시트의 컬럼 순서대로 데이터를 넣습니다.
+                history_sheet.append_row([name, now, r, int(p)])
                 st.success(f"{name} 기록 완료!")
                 st.rerun()
 
@@ -66,9 +63,8 @@ try:
     st.divider()
     st.subheader("📜 최근 기록")
     if not history_df.empty:
-        st.dataframe(history_df.tail(10), use_container_width=True)
-    else:
-        st.write("아직 기록이 없습니다. 첫 점수를 눌러보세요!")
+        # 보기 편하게 최신순으로 정렬해서 보여줌
+        st.dataframe(history_df.iloc[::-1].head(10), use_container_width=True)
 
 except Exception as e:
-    st.error(f"연결 실패: {e}")
+    st.error(f"오류 발생: {e}")
