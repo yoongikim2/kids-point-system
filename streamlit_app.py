@@ -18,7 +18,6 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data():
     url = "https://docs.google.com/spreadsheets/d/1psSU23KIAOpxwdGaJ67Deaz5XWk3VAkFo0DXM2qsCqA/edit"
-    # 영어로 바꾼 시트 이름을 사용합니다
     rules = conn.read(spreadsheet=url, worksheet="rules")
     history = conn.read(spreadsheet=url, worksheet="history")
     return rules, history
