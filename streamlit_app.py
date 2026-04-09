@@ -6,7 +6,7 @@ from datetime import datetime
 import random
 
 # 페이지 설정
-st.set_page_config(page_title="모건&모하의 성장 미션", layout="centered")
+st.set_page_config(page_title="모건&모하의 금메달 미션", layout="centered")
 
 # --- 모바일 최적화 CSS ---
 st.markdown("""
@@ -18,7 +18,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-title">🌱 모건&모하의 성장 미션!</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-title">🌱 모건&모하의 금메달 성장 미션!</p>', unsafe_allow_html=True)
 
 # --- 응원 문구 관리 ---
 if 'm_msg' not in st.session_state:
@@ -62,10 +62,10 @@ try:
     m_medals = calculate_medals("모건")
     h_medals = calculate_medals("모하")
 
-    # 상단 금메달 점수판
+    # 상단 금메달 점수판 (모건👦, 모하🧒 둘 다 멋진 남자아이로 수정!)
     col_m, col_h = st.columns(2)
     col_m.markdown(f"<div class='medal-display'>👦 모건<br>🥇 {m_medals}개</div>", unsafe_allow_html=True)
-    col_h.markdown(f"<div class='medal-display'>👧 모하<br>🥇 {h_medals}개</div>", unsafe_allow_html=True)
+    col_h.markdown(f"<div class='medal-display'>🧒 모하<br>🥇 {h_medals}개</div>", unsafe_allow_html=True)
 
     st.divider()
 
@@ -74,7 +74,6 @@ try:
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
         history_sheet.append_row([name, now, r, int(p)])
         
-        # 새로 고침된 데이터를 가져오기 위해 다시 읽기
         updated_history = pd.DataFrame(history_sheet.get_all_records())
         updated_history['날짜'] = updated_history['일시'].str[:10]
         
@@ -99,6 +98,21 @@ try:
                 st.session_state[f'{kid}_medal_popup'] = False
                 st.rerun()
 
+    # --- 🎨 글씨를 모르는 아이들을 위한 단어 인식 그림 달아주기 ---
+    def get_emoji_for_rule(rule_name):
+        name = str(rule_name)
+        if "기상" in name or "아침" in name: return "⏰"
+        if "씻고" in name or "옷" in name: return "👕"
+        if "갈 준비" in name: return "🏃‍♂️"
+        if "시계" in name or "물통" in name or "물건" in name: return "🎒"
+        if "태권도" in name and "시간" in name: return "🥋"
+        if "귀가" in name or "끝나고" in name: return "🏠"
+        if "식사" in name or "밥" in name: return "🍽️"
+        if "예쁜 말" in name or "이야기" in name: return "💖"
+        if "숙제" in name or "공부" in name: return "📚"
+        if "잠자기" in name or "밤" in name: return "🌙"
+        return "⭐" # 해당하는 단어가 없으면 기본 별 모양
+
     tab1, tab2 = st.tabs(["🚀 미션", "🎁 보상"])
 
     with tab1:
@@ -111,8 +125,11 @@ try:
             m_act = history_df[(history_df['이름'] == "모건") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])] if not history_df.empty else pd.DataFrame()
             h_act = history_df[(history_df['이름'] == "모하") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])] if not history_df.empty else pd.DataFrame()
 
-            with st.expander(row['규칙명']):
-                # 모건
+            # 규칙 제목 앞에 알아서 그림(이모티콘)을 붙여줍니다!
+            rule_title_with_emoji = f"{get_emoji_for_rule(row['규칙명'])} {row['규칙명']}"
+
+            with st.expander(rule_title_with_emoji):
+                # 모건 (👦)
                 st.write("👦 **모건**")
                 m_c1, m_c2 = st.columns(2)
                 if not m_act.empty:
@@ -121,8 +138,8 @@ try:
                     if m_c1.button("성공", key=f"m_s_{i}"): save_log("모건", 1, row['규칙명'])
                     if m_c2.button("실패", key=f"m_f_{i}"): save_log("모건", -1, row['규칙명'])
                 
-                # 모하
-                st.write("👧 **모하**")
+                # 모하 (🧒) - 남자아이 얼굴로 통일!
+                st.write("🧒 **모하**")
                 h_c1, h_c2 = st.columns(2)
                 if not h_act.empty:
                     h_c1.button("완료 ✅" if h_act.iloc[0]['변동 점수'] > 0 else "실패 ❌", key=f"h_d_{i}", disabled=True)
@@ -140,20 +157,17 @@ try:
         ]
         
         for idx, item in enumerate(reward_items):
-            with st.expander(f"{item['name']} (🥇 {item['cost']}개)"):
+            with st.expander(f"🎁 {item['name']} (🥇 {item['cost']}개)"):
                 c1, c2 = st.columns(2)
                 if c1.button(f"모건 구매", key=f"rb_m_{idx}", disabled=m_medals < item['cost']):
                     save_log("모건", -item['cost'], f"[보상] {item['name']}")
                 if c2.button(f"모하 구매", key=f"rb_h_{idx}", disabled=h_medals < item['cost']):
                     save_log("모하", -item['cost'], f"[보상] {item['name']}")
 
-    # --- 📜 기록판 부활 영역 ---
     st.divider()
     st.subheader("📜 오늘 기록")
     if not history_df.empty:
-        # 오늘 날짜의 기록만 최신순으로 가져오기
         today_logs = history_df[history_df['날짜'] == today_str][['이름', '일시', '규칙/보상명', '변동 점수']].iloc[::-1]
-        
         if not today_logs.empty:
             st.dataframe(today_logs.head(10), use_container_width=True)
         else:
