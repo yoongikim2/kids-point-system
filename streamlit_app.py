@@ -33,7 +33,7 @@ try:
         history_df['변동 점수'] = pd.to_numeric(history_df['변동 점수'], errors='coerce').fillna(0)
         history_df['날짜'] = history_df['일시'].str[:10]
 
-    # [1] 무한 누적 점수 계산 (모든 기록 합산)
+    # 누적 점수 계산
     def calculate_score(name):
         if not history_df.empty:
             return int(history_df[history_df['이름'] == name]['변동 점수'].sum())
@@ -42,7 +42,7 @@ try:
     m_score = calculate_score("김모건")
     h_score = calculate_score("김모하")
 
-    # 상단 점수판
+    # 상단 점수판 (간결하게 수정)
     col1, col2 = st.columns(2)
     col1.metric("모건이 누적 점수", f"{m_score}점")
     col2.metric("모하 누적 점수", f"{h_score}점")
@@ -52,16 +52,14 @@ try:
     # 기록 저장 함수
     def save_log(name, p, r):
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        # 숫자로 확실히 변환해서 저장
         history_sheet.append_row([name, now, r, int(p)])
         st.success(f"기록 완료!")
         st.rerun()
 
-    # [2] 오늘 미션 10개 완료 체크 함수
+    # 오늘 미션 10개 완료 체크 함수
     def check_today_complete(name):
         if history_df.empty: return False
         today = datetime.now().strftime("%Y-%m-%d")
-        # 오늘 수행한 규칙(보상 제외) 개수 파악
         today_done = history_df[
             (history_df['이름'] == name) & 
             (history_df['날짜'] == today) & 
@@ -73,13 +71,12 @@ try:
 
     # [TAB 1: 규칙 지키기]
     with tab1:
-        # 모건이 상태 메시지
+        # 상태 메시지
         if check_today_complete("김모건"):
             st.success("✨ 모건이 오늘의 미션 10개 완료! 대단해요! ✨")
         else:
             st.subheader("모건아, 오늘도 멋지게 규칙을 지켜보자!")
 
-        # 모하 상태 메시지
         if check_today_complete("김모하"):
             st.success("✨ 모하 오늘의 미션 10개 완료! 최고예요! ✨")
         else:
@@ -87,7 +84,9 @@ try:
 
         for i, row in rules_df.iterrows():
             if not row.get('규칙명'): continue
-            with st.expander(f"{row['규칙명']} (+{row['상점']}/-{row['벌점']})"):
+            
+            # [수정] 제목에서 (+10/-10)을 제거하여 깔끔하게 표시
+            with st.expander(row['규칙명']):
                 c1, c2, c3, c4 = st.columns(4)
                 if c1.button("모건✅", key=f"m_r_{i}"): save_log("김모건", row['상점'], row['규칙명'])
                 if c2.button("모건❌", key=f"m_f_{i}"): save_log("김모건", -row['벌점'], row['규칙명'])
@@ -99,13 +98,14 @@ try:
         st.subheader("🎁 점수를 사용해서 소원을 빌어보세요!")
         for i, row in rewards_df.iterrows():
             if not row.get('보상명'): continue
-            with st.expander(f"{row['보상명']} ({row['필요점수']}점 차감)"):
+            
+            # 보상 마켓 제목도 깔끔하게 보상명만 표시 (내용물에 가격 명시)
+            with st.expander(f"{row['보상명']}"):
+                st.write(f"💰 필요 점수: **{row['필요점수']}점**")
                 c1, c2 = st.columns(2)
                 
-                # [중요] 점수 차감 시 마이너스(-)를 강제로 붙임
                 m_can_buy = m_score >= row['필요점수']
                 if c1.button(f"모건 구매", key=f"m_p_{i}", disabled=not m_can_buy):
-                    # -1을 곱해서 마이너스로 만듭니다.
                     save_log("김모건", -1 * abs(int(row['필요점수'])), f"[보상] {row['보상명']}")
                 
                 h_can_buy = h_score >= row['필요점수']
