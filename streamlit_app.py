@@ -8,39 +8,49 @@ import random
 # 페이지 설정
 st.set_page_config(page_title="모건&모하의 성장 미션", layout="centered")
 
-# --- [추가] 모바일 최적화 CSS (글자 크기 조절) ---
+# --- [디자인 수정] 모바일 가로 정렬 및 글자 크기 최적화 ---
 st.markdown("""
     <style>
     /* 메인 제목 크기 */
     .main-title {
-        font-size: 26px !important;
+        font-size: 24px !important;
         font-weight: bold;
-        margin-bottom: 5px;
-        padding-top: 0px;
+        margin-bottom: 10px;
     }
     /* 응원 문구 크기 */
     .msg-text {
-        font-size: 18px !important;
-        margin-bottom: 2px !important;
-        font-weight: 500;
+        font-size: 16px !important;
+        margin-bottom: 5px !important;
     }
-    /* 점수판 크기 살짝 조정 */
-    .stMetric {
-        padding: 5px !important;
+    /* [핵심] 모바일에서도 버튼을 가로로 강제 정렬 */
+    [data-testid="stHorizontalBlock"] {
+        flex-direction: row !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        gap: 5px !important;
+    }
+    [data-testid="column"] {
+        min-width: 0px !important;
+        flex: 1 1 auto !important;
+    }
+    /* 버튼 내부 텍스트와 여백 조정 */
+    .stButton > button {
+        font-size: 13px !important;
+        padding: 0px !important;
+        height: 38px !important;
+        width: 100% !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 제목 표시 (CSS 적용)
+# 제목 표시
 st.markdown('<p class="main-title">🌱 모건&모하의 규칙 성장 미션!</p>', unsafe_allow_html=True)
 
-# --- 응원 문구 리스트 (이름 누락 방지 수정) ---
+# --- 응원 문구 리스트 ---
 if 'm_msg' not in st.session_state:
     love_msgs = ["사랑해", "너무 사랑해", "오늘도 할수 있어!", "난 멋지니깐!", "규칙을 잘지키자!", "우리집은 내가 지킨다!", "스스로 하는 멋진 나!"]
-    # 모든 문구에 이름이 붙도록 확실히 수정
     m_list = [f"모건, {msg}" for msg in love_msgs] + ["모건, 멋지게 성장 중!", "모건, 넌 정말 훌륭해!", "모건, 오늘도 미션 클리어!"]
     h_list = [f"모하, {msg}" for msg in love_msgs] + ["모하, 한 걸음씩 쑥쑥!", "모하, 오늘도 빛나는 하루!", "모하, 미션을 즐겁게 해보자!"]
-    
     st.session_state.m_msg = random.choice(m_list)
     st.session_state.h_msg = random.choice(h_list)
 
@@ -70,7 +80,6 @@ try:
         history_df['변동 점수'] = pd.to_numeric(history_df['변동 점수'], errors='coerce').fillna(0)
         history_df['날짜'] = history_df['일시'].str[:10]
 
-    # 누적 점수 계산
     def calculate_score(name):
         if not history_df.empty:
             return int(history_df[history_df['이름'] == name]['변동 점수'].sum())
@@ -81,15 +90,15 @@ try:
 
     # 상단 점수판
     col_score1, col_score2 = st.columns(2)
-    col_score1.metric("모건 포인트", f"{m_score}점")
-    col_score2.metric("모하 포인트", f"{h_score}점")
+    col_score1.metric("모건", f"{m_score}점")
+    col_score2.metric("모하", f"{h_score}점")
 
     st.divider()
 
     def save_log(name, p, r):
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
         history_sheet.append_row([name, now, r, int(p)])
-        st.success(f"미션 기록 완료!")
+        st.success(f"기록 완료!")
         st.rerun()
 
     def check_today_complete(name):
@@ -99,19 +108,13 @@ try:
 
     tab1, tab2 = st.tabs(["🚀 미션", "🎁 상점"])
 
-    # [TAB 1: 성장 미션]
     with tab1:
-        # --- 모건 응원 구역 ---
-        if check_today_complete("모건"): 
-            st.success("✨ 모건 오늘 성장 완료! ✨")
-        else: 
-            st.markdown(f'<p class="msg-text">💡 {st.session_state.m_msg}</p>', unsafe_allow_html=True)
+        # 모건&모하 응원 문구 나란히 표시
+        if check_today_complete("모건"): st.success("✨ 모건 성장 완료! ✨")
+        else: st.markdown(f'<p class="msg-text">💡 {st.session_state.m_msg}</p>', unsafe_allow_html=True)
 
-        # --- 모하 응원 구역 ---
-        if check_today_complete("모하"): 
-            st.success("✨ 모하 오늘 성장 완료! ✨")
-        else: 
-            st.markdown(f'<p class="msg-text">💡 {st.session_state.h_msg}</p>', unsafe_allow_html=True)
+        if check_today_complete("모하"): st.success("✨ 모하 성장 완료! ✨")
+        else: st.markdown(f'<p class="msg-text">💡 {st.session_state.h_msg}</p>', unsafe_allow_html=True)
 
         for i, row in rules_df.iterrows():
             if not row.get('규칙명'): continue
@@ -127,20 +130,24 @@ try:
             h_status = get_status_label("모하", row['규칙명'])
 
             with st.expander(row['규칙명']):
+                # 가로로 4칸을 무조건 유지하도록 설정
                 c1, c2, c3, c4 = st.columns(4)
+                
+                # 모건 버튼 구역
                 if m_status:
-                    c1.button(m_status, key=f"m_r_{i}", disabled=True, use_container_width=True)
+                    c1.button(m_status, key=f"m_r_{i}", disabled=True)
+                    # 옆 칸을 비워두지 않기 위해 투명 버튼 처리 (가로 비율 유지용)
                 else:
                     if c1.button("모건✅", key=f"m_r_{i}"): save_log("모건", row['상점'], row['규칙명'])
                     if c2.button("모건❌", key=f"m_f_{i}"): save_log("모건", -row['벌점'], row['규칙명'])
                 
+                # 모하 버튼 구역
                 if h_status:
-                    c3.button(h_status, key=f"h_r_{i}", disabled=True, use_container_width=True)
+                    c3.button(h_status, key=f"h_r_{i}", disabled=True)
                 else:
                     if c3.button("모하✅", key=f"h_r_{i}"): save_log("모하", row['상점'], row['규칙명'])
                     if c4.button("모하❌", key=f"h_f_{i}"): save_log("모하", -row['벌점'], row['규칙명'])
 
-    # [TAB 2: 보상 상점]
     with tab2:
         st.subheader("🎁 포인트 사용")
         for i, row in rewards_df.iterrows():
@@ -150,18 +157,17 @@ try:
                 col_m, col_h = st.columns(2)
                 with col_m:
                     m_can_buy = m_score >= needed
-                    st.write(f"모건: {m_score}/{needed}")
+                    st.write(f"모건:{m_score}/{needed}")
                     if st.button(f"구매", key=f"m_p_{i}", disabled=not m_can_buy, use_container_width=True):
                         save_log("모건", -needed, f"[보상] {row['보상명']}")
                 with col_h:
                     h_can_buy = h_score >= needed
-                    st.write(f"모하: {h_score}/{needed}")
+                    st.write(f"모하:{h_score}/{needed}")
                     if st.button(f"구매", key=f"h_p_{i}", disabled=not h_can_buy, use_container_width=True):
                         save_log("모하", -needed, f"[보상] {row['보상명']}")
 
     st.divider()
     if not history_df.empty:
-        st.subheader("📜 오늘 기록")
         display_df = history_df[history_df['날짜'] == today_str][['이름', '일시', '규칙/보상명', '변동 점수']].iloc[::-1]
         st.dataframe(display_df.head(5), use_container_width=True)
 
