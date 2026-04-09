@@ -18,7 +18,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-title">🌱 모건&모하의 금메달 성장 미션!</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-title">🌱 모건&모하의 성장 미션!</p>', unsafe_allow_html=True)
 
 # --- 응원 문구 관리 ---
 if 'm_msg' not in st.session_state:
