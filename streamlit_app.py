@@ -27,13 +27,13 @@ try:
     history_df = pd.DataFrame(history_sheet.get_all_records())
     rewards_df = pd.DataFrame(rewards_sheet.get_all_records())
 
-    # 데이터 정제 (이름 두 글자 처리를 위해 김모건/모건 혼용 방지)
+    # 데이터 정제 (이름은 '모건', '모하' 두 글자로 통일)
     if not history_df.empty:
         history_df['이름'] = history_df['이름'].astype(str).str.replace("김", "").str.strip()
         history_df['변동 점수'] = pd.to_numeric(history_df['변동 점수'], errors='coerce').fillna(0)
         history_df['날짜'] = history_df['일시'].str[:10]
 
-    # [1] 누적 점수 계산 (이름: 모건, 모하)
+    # 누적 점수 계산
     def calculate_score(name):
         if not history_df.empty:
             return int(history_df[history_df['이름'] == name]['변동 점수'].sum())
@@ -77,40 +77,43 @@ try:
         if check_today_complete("모하"): st.success("✨ 모하 오늘 미션 10개 완료! ✨")
         else: st.subheader("모하, 오늘도 화이팅!")
 
-        for i, row in rules_df.iterrows():
-            if not row.get('규칙명'): continue
-            with st.expander(row['규칙명']):
-                c1, c2, c3, c4 = st.columns(4)
-                if c1.button("모건 ✅", key=f"m_r_{i}"): save_log("모건", row['상점'], row['규칙명'])
-                if c2.button("모건 ❌", key=f"m_f_{i}"): save_log("모건", -row['벌점'], row['규칙명'])
-                if c3.button("모하 ✅", key=f"h_r_{i}"): save_log("모하", row['상점'], row['규칙명'])
-                if c4.button("모하 ❌", key=f"h_f_{i}"): save_log("모하", -row['벌점'], row['규칙명'])
+        # [수정] 펼침 메뉴 대신 선택 상자(selectbox) 사용
+        rule_names = rules_df['규칙명'].tolist()
+        selected_rule = st.selectbox("어떤 규칙을 지켰나요?", ["규칙을 선택하세요"] + rule_names)
+
+        if selected_rule != "규칙을 선택하세요":
+            row = rules_df[rules_df['규칙명'] == selected_rule].iloc[0]
+            st.info(f"선택한 규칙: **{selected_rule}**")
+            c1, c2, c3, c4 = st.columns(4)
+            if c1.button("모건 ✅", key="m_r_btn"): save_log("모건", row['상점'], selected_rule)
+            if c2.button("모건 ❌", key="m_f_btn"): save_log("모건", -row['벌점'], selected_rule)
+            if c3.button("모하 ✅", key="h_r_btn"): save_log("모하", row['상점'], selected_rule)
+            if c4.button("모하 ❌", key="h_f_btn"): save_log("모하", -row['벌점'], selected_rule)
 
     # [TAB 2: 보상 마켓]
     with tab2:
-        st.subheader("🎁 점수로 소원 구매하기")
-        for i, row in rewards_df.iterrows():
-            if not row.get('보상명'): continue
-            
-            # 필요 점수 양수로 표시 (abs 사용)
+        st.subheader("🎁 소원 구매하기")
+        reward_names = rewards_df['보상명'].tolist()
+        selected_reward = st.selectbox("어떤 선물을 살까요?", ["보상을 선택하세요"] + reward_names)
+
+        if selected_reward != "보상을 선택하세요":
+            row = rewards_df[rewards_df['보상명'] == selected_reward].iloc[0]
             needed = abs(int(row['필요점수']))
             
-            with st.expander(f"{row['보상명']}"):
-                col_m, col_h = st.columns(2)
-                
-                # 모건 구매 구역
-                with col_m:
-                    m_can_buy = m_score >= needed
-                    st.write(f"모건 필요: **{needed}점**")
-                    if st.button(f"모건 구매", key=f"m_p_{i}", disabled=not m_can_buy, use_container_width=True):
-                        save_log("모건", -needed, f"[보상] {row['보상명']}")
-                
-                # 모하 구매 구역
-                with col_h:
-                    h_can_buy = h_score >= needed
-                    st.write(f"모하 필요: **{needed}점**")
-                    if st.button(f"모하 구매", key=f"h_p_{i}", disabled=not h_can_buy, use_container_width=True):
-                        save_log("모하", -needed, f"[보상] {row['보상명']}")
+            st.info(f"보상: **{selected_reward}** (필요 점수: {needed}점)")
+            col_m, col_h = st.columns(2)
+            
+            with col_m:
+                m_can_buy = m_score >= needed
+                st.write(f"모건 잔액: **{m_score}점**")
+                if st.button(f"모건 구매", key="m_p_btn", disabled=not m_can_buy, use_container_width=True):
+                    save_log("모건", -needed, f"[보상] {selected_reward}")
+            
+            with col_h:
+                h_can_buy = h_score >= needed
+                st.write(f"모하 잔액: **{h_score}점**")
+                if st.button(f"모하 구매", key="h_p_btn", disabled=not h_can_buy, use_container_width=True):
+                    save_log("모하", -needed, f"[보상] {selected_reward}")
 
     st.divider()
     st.subheader("📜 최근 기록")
