@@ -47,8 +47,13 @@ try:
     def load_base_data():
         return pd.DataFrame(rules_sheet.get_all_records()), pd.DataFrame(rewards_sheet.get_all_records())
 
+    # [핵심 수정 1] 기록(history) 데이터도 화면 새로고침할 때마다 부르지 않고 기억하게 만듭니다!
+    @st.cache_data(ttl=600)
+    def load_history_data():
+        return pd.DataFrame(history_sheet.get_all_records())
+
     rules_df, rewards_df = load_base_data()
-    history_df = pd.DataFrame(history_sheet.get_all_records())
+    history_df = load_history_data()
 
     if '이모티콘' not in rules_df.columns:
         rules_df.insert(0, '이모티콘', '⭐')
@@ -107,6 +112,8 @@ try:
             st.balloons()
             st.session_state[f'{name}_medal_popup'] = True
         
+        # [핵심 수정 2] 시트에 뭔가 저장하고 나면, 기억(캐시)을 비워서 최신 정보를 가져오게 합니다.
+        load_history_data.clear()
         st.rerun()
 
     for kid in ["모건", "모하"]:
@@ -168,7 +175,6 @@ try:
                     save_log("모하", -needed, f"[보상] {row['보상명']}{suffix}")
 
     with tab3:
-        # [추가] 관리자 모드 상태 관리
         if 'admin_mode' not in st.session_state:
             st.session_state.admin_mode = False
 
@@ -181,7 +187,6 @@ try:
                 if idx < current_stamps:
                     grid_html += "<div style='font-size: 35px;'>💮</div>"
                 else:
-                    # [수정] 찍히지 않은 도장은 구분이 확 가도록 까만 동그라미로 변경!
                     grid_html += "<div style='font-size: 35px; opacity: 0.4;'>⚫</div>"
             grid_html += "</div>"
             st.markdown(grid_html, unsafe_allow_html=True)
@@ -196,12 +201,10 @@ try:
                     idx = r * 5 + c
                     with cols[c]:
                         if idx < current_edit_stamps:
-                            # 칠해진 도장 (누르면 임시 감소)
                             if st.button("💮", key=f"rm_{name}_{idx}"):
                                 st.session_state[f'edit_{"m" if name=="모건" else "h"}_stamps'] -= 1
                                 st.rerun()
                         else:
-                            # [수정] 빈 도장도 까만 동그라미 (누르면 임시 증가)
                             if st.button("⚫", key=f"add_{name}_{idx}"):
                                 st.session_state[f'edit_{"m" if name=="모건" else "h"}_stamps'] += 1
                                 st.rerun()
@@ -225,14 +228,12 @@ try:
             draw_stamp_board("모하", h_stamps)
         
         else:
-            # 관리자 모드 켜졌을 때
             st.success("🔓 도장 관리 모드가 활성화되었습니다. 동그라미를 마구 클릭해도 로딩이 걸리지 않습니다!")
             
             draw_interactive_stamp_board("모건", st.session_state.edit_m_stamps)
             st.divider()
             draw_interactive_stamp_board("모하", st.session_state.edit_h_stamps)
             
-            # [수정] 한 번에 구글 시트로 보내는 저장 버튼 & 나가기 버튼 신설
             st.divider()
             col_save, col_exit = st.columns(2)
             
@@ -250,6 +251,8 @@ try:
                     
                     if rows_to_add:
                         history_sheet.append_rows(rows_to_add)
+                        # [핵심 수정 3] 저장 완료 시 캐시 지우기
+                        load_history_data.clear()
                     
                     st.session_state.admin_mode = False
                     st.success("✅ 구글 시트에 안전하게 저장되었습니다!")
