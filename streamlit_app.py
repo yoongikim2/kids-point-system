@@ -60,6 +60,7 @@ try:
     if '메달종류' not in rewards_df.columns:
         rewards_df['메달종류'] = '금메달'
 
+    # ★ 여기서 구글 시트에 있는 미션 개수를 자동으로 셉니다.
     total_rules_count = len(rules_df)
     today_str = datetime.now(KST).strftime("%Y-%m-%d")
 
@@ -192,7 +193,8 @@ try:
             grid_html += "</div>"
             st.markdown(grid_html, unsafe_allow_html=True)
 
-        st.info("💡 10개 미션을 모두 완료하면 도장 3개를 받아요! 30개를 모으면 💎 다이아몬드로 자동 변환됩니다.")
+        # [핵심 수정] 하드코딩된 '10개' 문구를 변수 {total_rules_count}개로 변경!
+        st.info(f"💡 {total_rules_count}개 미션을 모두 완료하면 도장 3개를 받아요! 30개를 모으면 💎 다이아몬드로 자동 변환됩니다.")
 
         if not st.session_state.admin_mode:
             with st.expander("🔒 도장 수동 관리 (부모님 전용)"):
@@ -213,7 +215,6 @@ try:
         else:
             st.success("🔓 관리자 모드: 드래그 바(슬라이더)를 쓱 밀어서 개수를 맞추고 저장하세요!")
             
-            # --- [핵심 변경] 수십 개의 버튼을 없애고 쾌적한 슬라이더 도입 ---
             st.markdown("#### 🛠️ 👦 모건 도장 개수 조절")
             st.session_state.edit_m_stamps = st.slider("모건 도장", 0, 30, st.session_state.edit_m_stamps)
             draw_stamp_board("모건", st.session_state.edit_m_stamps)
