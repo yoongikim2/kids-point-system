@@ -116,7 +116,6 @@ try:
 
     for kid in ["모건", "모하"]:
         if st.session_state.get(f'{kid}_medal_popup'):
-            # [자연스러운 호칭 패치 적용 완료!]
             josa_ga = "이가" if kid == "모건" else "가"
             josa_ya = "아" if kid == "모건" else "야"
             
@@ -193,24 +192,6 @@ try:
             grid_html += "</div>"
             st.markdown(grid_html, unsafe_allow_html=True)
 
-        def draw_interactive_stamp_board(name, current_edit_stamps):
-            st.markdown(f"#### 🛠️ {'👦' if name=='모건' else '🧒'} {name}의 칭찬도장판 ({current_edit_stamps}/30) - 수정 모드")
-            st.progress(current_edit_stamps / 30)
-            
-            for r in range(6):
-                cols = st.columns(5)
-                for c in range(5):
-                    idx = r * 5 + c
-                    with cols[c]:
-                        if idx < current_edit_stamps:
-                            if st.button("💮", key=f"rm_{name}_{idx}"):
-                                st.session_state[f'edit_{"m" if name=="모건" else "h"}_stamps'] -= 1
-                                st.rerun()
-                        else:
-                            if st.button("⚫", key=f"add_{name}_{idx}"):
-                                st.session_state[f'edit_{"m" if name=="모건" else "h"}_stamps'] += 1
-                                st.rerun()
-
         st.info("💡 10개 미션을 모두 완료하면 도장 3개를 받아요! 30개를 모으면 💎 다이아몬드로 자동 변환됩니다.")
 
         if not st.session_state.admin_mode:
@@ -230,11 +211,18 @@ try:
             draw_stamp_board("모하", h_stamps)
         
         else:
-            st.success("🔓 도장 관리 모드가 활성화되었습니다. 동그라미를 마구 클릭해도 로딩이 걸리지 않습니다!")
+            st.success("🔓 관리자 모드: 드래그 바(슬라이더)를 쓱 밀어서 개수를 맞추고 저장하세요!")
             
-            draw_interactive_stamp_board("모건", st.session_state.edit_m_stamps)
+            # --- [핵심 변경] 수십 개의 버튼을 없애고 쾌적한 슬라이더 도입 ---
+            st.markdown("#### 🛠️ 👦 모건 도장 개수 조절")
+            st.session_state.edit_m_stamps = st.slider("모건 도장", 0, 30, st.session_state.edit_m_stamps)
+            draw_stamp_board("모건", st.session_state.edit_m_stamps)
+            
             st.divider()
-            draw_interactive_stamp_board("모하", st.session_state.edit_h_stamps)
+            
+            st.markdown("#### 🛠️ 🧒 모하 도장 개수 조절")
+            st.session_state.edit_h_stamps = st.slider("모하 도장", 0, 30, st.session_state.edit_h_stamps)
+            draw_stamp_board("모하", st.session_state.edit_h_stamps)
             
             st.divider()
             col_save, col_exit = st.columns(2)
