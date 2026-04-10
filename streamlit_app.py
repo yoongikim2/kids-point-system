@@ -8,7 +8,7 @@ import random
 # 페이지 설정
 st.set_page_config(page_title="모건&모하의 성장 미션", layout="centered")
 
-# --- 모바일 최적화 CSS ---
+# 모바일 최적화 CSS
 st.markdown("""
     <style>
     .main-title { font-size: 24px !important; font-weight: bold; margin-bottom: 10px; text-align: center; }
@@ -20,15 +20,17 @@ st.markdown("""
 
 st.markdown('<p class="main-title">🌱 모건&모하의 성장 미션!</p>', unsafe_allow_html=True)
 
-# --- 한국 시간(KST) 설정 ---
+# 한국 시간(KST) 설정
 KST = timezone(timedelta(hours=9))
 
-# --- 응원 문구 관리 ---
+# 응원 문구 관리
 if 'm_msg' not in st.session_state:
     love_msgs = ["사랑해", "너무 사랑해", "오늘도 할수 있어!", "난 멋지니깐!", "규칙을 잘지키자!", "우리집은 내가 지킨다!", "스스로 하는 멋진 나!"]
     st.session_state.m_msg = f"모건, {random.choice(love_msgs)}"
     st.session_state.h_msg = f"모하, {random.choice(love_msgs)}"
 
+# [최적화 1] 구글 로그인 정보 캐싱 (매번 로그인 안 함)
+@st.cache_resource
 def get_gspread_client():
     creds_info = st.secrets["gspread_service_account"]
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -44,33 +46,33 @@ try:
     history_sheet = sh.worksheet("history")
     rewards_sheet = sh.worksheet("rewards")
 
-    rules_df = pd.DataFrame(rules_sheet.get_all_records())
-    history_df = pd.DataFrame(history_sheet.get_all_records())
-    rewards_df = pd.DataFrame(rewards_sheet.get_all_records())
+    # [최적화 2] 규칙과 보상은 10분 동안 메모리에 기억 (API 초과 방지)
+    @st.cache_data(ttl=600)
+    def load_base_data():
+        return pd.DataFrame(rules_sheet.get_all_records()), pd.DataFrame(rewards_sheet.get_all_records())
 
-    # 보상 시트에 '메달종류' 컬럼이 없으면 기본 생성
+    rules_df, rewards_df = load_base_data()
+    # 기록은 실시간으로 보여야 하므로 매번 불러옴 (이거 1번은 괜찮습니다!)
+    history_df = pd.DataFrame(history_sheet.get_all_records())
+
     if '메달종류' not in rewards_df.columns:
         rewards_df['메달종류'] = '금메달'
 
     total_rules_count = len(rules_df)
     today_str = datetime.now(KST).strftime("%Y-%m-%d")
 
-    # 데이터 정제
     if not history_df.empty:
         history_df['이름'] = history_df['이름'].astype(str).str.replace("김", "").str.strip()
         history_df['날짜'] = history_df['일시'].str[:10]
 
-    # [업데이트] 금메달, 도장, 다이아몬드 계산 로직
     def calculate_assets(name):
         if history_df.empty: return 0, 0, 0
         df = history_df[history_df['이름'] == name]
         
-        # 금메달 계산
         gold_earned = len(df[df['규칙/보상명'] == "🥇 금메달 획득"])
         gold_spent = df[(df['규칙/보상명'].str.startswith("[보상]")) & (~df['규칙/보상명'].str.contains("다이아"))]['변동 점수'].abs().sum()
         current_gold = int(gold_earned - gold_spent)
 
-        # 칭찬도장 & 다이아몬드 계산
         total_stamps = df[df['규칙/보상명'] == "🌟 칭찬도장"]['변동 점수'].sum()
         dia_spent = df[(df['규칙/보상명'].str.startswith("[보상]")) & (df['규칙/보상명'].str.contains("다이아"))]['변동 점수'].abs().sum()
         
@@ -82,29 +84,27 @@ try:
     m_gold, m_dia, m_stamps = calculate_assets("모건")
     h_gold, h_dia, h_stamps = calculate_assets("모하")
 
-    # 상단 자산 현황판
     col_m, col_h = st.columns(2)
     col_m.markdown(f"<div class='medal-display'>👦 모건<br>🥇 {m_gold}개 &nbsp;|&nbsp; 💎 {m_dia}개</div>", unsafe_allow_html=True)
     col_h.markdown(f"<div class='medal-display'>🧒 모하<br>🥇 {h_gold}개 &nbsp;|&nbsp; 💎 {h_dia}개</div>", unsafe_allow_html=True)
 
     st.divider()
 
+    # [최적화 3] 불필요한 구글 시트 재호출 제거
     def save_log(name, p, r):
         now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
         history_sheet.append_row([name, now, r, int(p)])
         
-        # 금메달 & 칭찬도장 획득 체크
-        updated_history = pd.DataFrame(history_sheet.get_all_records())
-        updated_history['날짜'] = updated_history['일시'].str[:10]
-        today_actions = updated_history[(updated_history['이름'] == name) & (updated_history['날짜'] == today_str)]
+        # 구글 시트를 다시 부르지 않고 가상의 데이터로 계산하여 속도/API 절약
+        new_row = pd.DataFrame([[name, now, r, int(p), today_str]], columns=['이름', '일시', '규칙/보상명', '변동 점수', '날짜'])
+        updated_history = pd.concat([history_df, new_row], ignore_index=True)
         
+        today_actions = updated_history[(updated_history['이름'] == name) & (updated_history['날짜'] == today_str)]
         success_count = len(today_actions[today_actions['변동 점수'] > 0])
         fail_count = len(today_actions[today_actions['변동 점수'] < 0])
         already_got_medal = not today_actions[today_actions['규칙/보상명'] == "🥇 금메달 획득"].empty
 
-        # 모든 규칙 달성 && 실패 0개 && 오늘 메달 안 받았을 때
         if success_count == total_rules_count and fail_count == 0 and not already_got_medal:
-            # 🥇 금메달 1개, 🌟 칭찬도장 3개 동시 지급!
             history_sheet.append_rows([
                 [name, now, "🥇 금메달 획득", 1],
                 [name, now, "🌟 칭찬도장", 3]
@@ -114,7 +114,6 @@ try:
         
         st.rerun()
 
-    # 금메달 획득 팝업 노출
     for kid in ["모건", "모하"]:
         if st.session_state.get(f'{kid}_medal_popup'):
             st.success(f"🎊 대박! {kid}이가 오늘 모든 미션을 성공했어요!\n\n**🥇 금메달 1개 + 🌟 칭찬도장 3개 획득!**")
@@ -136,7 +135,6 @@ try:
         if "잠자기" in name or "밤" in name: return "🌙"
         return "⭐"
 
-    # [업데이트] 탭 4개로 확장
     tab1, tab2, tab3, tab4 = st.tabs(["🚀 미션", "🎁 보상", "💮 도장판", "⚙️ 설정"])
 
     with tab1:
@@ -177,20 +175,16 @@ try:
             
             with st.expander(f"🎁 {row['보상명']} ({icon} {needed}개)"):
                 c1, c2 = st.columns(2)
-                
-                # 모건 구매
                 m_can = (m_dia >= needed) if is_diamond else (m_gold >= needed)
                 if c1.button(f"모건 구매", key=f"rb_m_{i}", disabled=not m_can):
                     suffix = " (다이아)" if is_diamond else " (금메달)"
                     save_log("모건", -needed, f"[보상] {row['보상명']}{suffix}")
                 
-                # 모하 구매
                 h_can = (h_dia >= needed) if is_diamond else (h_gold >= needed)
                 if c2.button(f"모하 구매", key=f"rb_h_{i}", disabled=not h_can):
                     suffix = " (다이아)" if is_diamond else " (금메달)"
                     save_log("모하", -needed, f"[보상] {row['보상명']}{suffix}")
 
-    # [신규] 칭찬도장판 탭
     with tab3:
         def draw_stamp_board(name, current_stamps):
             st.markdown(f"#### {'👦' if name=='모건' else '🧒'} {name}의 칭찬도장판 ({current_stamps}/30)")
@@ -210,28 +204,33 @@ try:
         st.divider()
         draw_stamp_board("모하", h_stamps)
 
-    # [신규] 설정 (관리자) 탭
+    # [최적화 4] 설정 탭에 Form(폼) 기능 추가 (글자 칠 때마다 서버 요동치는 것 방지)
     with tab4:
         st.subheader("⚙️ 미션 및 보상 관리")
-        st.write("표를 클릭해서 내용을 바로 수정하거나, 맨 아래 빈 줄에 새로 추가할 수 있습니다.")
+        st.write("표를 수정하고 반드시 **[저장하기]** 버튼을 눌러야 반영됩니다.")
         
-        st.markdown("##### 📝 오늘의 규칙(미션) 수정")
-        edited_rules = st.data_editor(rules_df, num_rows="dynamic", use_container_width=True, key="rule_editor")
-        if st.button("미션 저장하기", type="primary"):
-            rules_sheet.clear()
-            rules_sheet.append_rows([edited_rules.columns.values.tolist()] + edited_rules.values.tolist())
-            st.success("✅ 미션이 성공적으로 업데이트되었습니다!")
-            st.rerun()
+        with st.form("rule_form"):
+            st.markdown("##### 📝 오늘의 규칙(미션) 수정")
+            edited_rules = st.data_editor(rules_df, num_rows="dynamic", use_container_width=True)
+            if st.form_submit_button("미션 저장하기", type="primary"):
+                rules_sheet.clear()
+                rules_sheet.append_rows([edited_rules.columns.values.tolist()] + edited_rules.values.tolist())
+                load_base_data.clear() # 캐시 지우기 (새로운 정보 불러오도록)
+                st.success("✅ 미션이 성공적으로 업데이트되었습니다!")
+                st.rerun()
 
         st.divider()
-        st.markdown("##### 🎁 보상 상점 수정")
-        st.caption("※ '메달종류' 칸에는 **금메달** 또는 **다이아** 라고 정확히 적어주세요.")
-        edited_rewards = st.data_editor(rewards_df, num_rows="dynamic", use_container_width=True, key="reward_editor")
-        if st.button("보상 저장하기", type="primary"):
-            rewards_sheet.clear()
-            rewards_sheet.append_rows([edited_rewards.columns.values.tolist()] + edited_rewards.values.tolist())
-            st.success("✅ 보상이 성공적으로 업데이트되었습니다!")
-            st.rerun()
+        
+        with st.form("reward_form"):
+            st.markdown("##### 🎁 보상 상점 수정")
+            st.caption("※ '메달종류' 칸에는 **금메달** 또는 **다이아** 라고 정확히 적어주세요.")
+            edited_rewards = st.data_editor(rewards_df, num_rows="dynamic", use_container_width=True)
+            if st.form_submit_button("보상 저장하기", type="primary"):
+                rewards_sheet.clear()
+                rewards_sheet.append_rows([edited_rewards.columns.values.tolist()] + edited_rewards.values.tolist())
+                load_base_data.clear() # 캐시 지우기
+                st.success("✅ 보상이 성공적으로 업데이트되었습니다!")
+                st.rerun()
 
     st.divider()
     st.subheader("📜 오늘 기록")
