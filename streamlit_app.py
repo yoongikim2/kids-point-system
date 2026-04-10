@@ -88,7 +88,6 @@ try:
 
     st.divider()
 
-    # 미션/보상용 자동 기록 함수
     def save_log(name, p, r):
         now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
         history_sheet.append_row([name, now, r, int(p)])
@@ -108,12 +107,6 @@ try:
             st.balloons()
             st.session_state[f'{name}_medal_popup'] = True
         
-        st.rerun()
-
-    # 수동 도장 클릭용 전용 함수
-    def save_manual_stamp(name, amount):
-        now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
-        history_sheet.append_row([name, now, "🌟 칭찬도장", int(amount)])
         st.rerun()
 
     for kid in ["모건", "모하"]:
@@ -175,16 +168,10 @@ try:
                     save_log("모하", -needed, f"[보상] {row['보상명']}{suffix}")
 
     with tab3:
-        st.info("💡 10개 미션을 모두 완료하면 도장 3개를 받아요! 30개를 모으면 💎 다이아몬드로 자동 변환됩니다.")
-        
-        # --- 🔒 관리자용 비밀번호 입력 ---
-        with st.expander("🔒 도장 수동 관리 (부모님 전용)"):
-            pwd = st.text_input("비밀번호 입력", type="password", key="stamp_pwd")
-            is_admin = (pwd == "0507")
-            if pwd and not is_admin:
-                st.error("비밀번호가 틀렸습니다.")
+        # [추가] 관리자 모드 상태 관리
+        if 'admin_mode' not in st.session_state:
+            st.session_state.admin_mode = False
 
-        # --- 일반 모드 도장판 (클릭 불가) ---
         def draw_stamp_board(name, current_stamps):
             st.markdown(f"#### {'👦' if name=='모건' else '🧒'} {name}의 칭찬도장판 ({current_stamps}/30)")
             st.progress(current_stamps / 30)
@@ -194,40 +181,84 @@ try:
                 if idx < current_stamps:
                     grid_html += "<div style='font-size: 35px;'>💮</div>"
                 else:
-                    grid_html += "<div style='font-size: 35px; opacity: 0.1;'>⚪</div>"
+                    # [수정] 찍히지 않은 도장은 구분이 확 가도록 까만 동그라미로 변경!
+                    grid_html += "<div style='font-size: 35px; opacity: 0.4;'>⚫</div>"
             grid_html += "</div>"
             st.markdown(grid_html, unsafe_allow_html=True)
 
-        # --- 관리자 모드 도장판 (클릭 가능) ---
-        def draw_interactive_stamp_board(name, current_stamps):
-            st.markdown(f"#### 🛠️ {'👦' if name=='모건' else '🧒'} {name}의 칭찬도장판 ({current_stamps}/30) - 수정 모드")
-            st.progress(current_stamps / 30)
+        def draw_interactive_stamp_board(name, current_edit_stamps):
+            st.markdown(f"#### 🛠️ {'👦' if name=='모건' else '🧒'} {name}의 칭찬도장판 ({current_edit_stamps}/30) - 수정 모드")
+            st.progress(current_edit_stamps / 30)
             
-            # 6줄 x 5칸 버튼 그리드 생성
             for r in range(6):
                 cols = st.columns(5)
                 for c in range(5):
                     idx = r * 5 + c
                     with cols[c]:
-                        if idx < current_stamps:
-                            # 칠해진 도장 (누르면 삭제)
-                            if st.button("💮", key=f"rm_{name}_{idx}", help="클릭하여 도장 삭제"):
-                                save_manual_stamp(name, -1)
+                        if idx < current_edit_stamps:
+                            # 칠해진 도장 (누르면 임시 감소)
+                            if st.button("💮", key=f"rm_{name}_{idx}"):
+                                st.session_state[f'edit_{"m" if name=="모건" else "h"}_stamps'] -= 1
+                                st.rerun()
                         else:
-                            # 빈 도장 (누르면 추가)
-                            if st.button("⚪", key=f"add_{name}_{idx}", help="클릭하여 도장 추가"):
-                                save_manual_stamp(name, 1)
-            st.markdown("<br>", unsafe_allow_html=True)
+                            # [수정] 빈 도장도 까만 동그라미 (누르면 임시 증가)
+                            if st.button("⚫", key=f"add_{name}_{idx}"):
+                                st.session_state[f'edit_{"m" if name=="모건" else "h"}_stamps'] += 1
+                                st.rerun()
 
-        if is_admin:
-            st.success("🔓 도장 관리 모드가 활성화되었습니다. 동그라미를 클릭해서 도장을 찍거나 지울 수 있습니다.")
-            draw_interactive_stamp_board("모건", m_stamps)
-            st.divider()
-            draw_interactive_stamp_board("모하", h_stamps)
-        else:
+        st.info("💡 10개 미션을 모두 완료하면 도장 3개를 받아요! 30개를 모으면 💎 다이아몬드로 자동 변환됩니다.")
+
+        if not st.session_state.admin_mode:
+            with st.expander("🔒 도장 수동 관리 (부모님 전용)"):
+                pwd = st.text_input("비밀번호 입력", type="password")
+                if st.button("확인"):
+                    if pwd == "0507":
+                        st.session_state.admin_mode = True
+                        st.session_state.edit_m_stamps = m_stamps
+                        st.session_state.edit_h_stamps = h_stamps
+                        st.rerun()
+                    else:
+                        st.error("비밀번호가 틀렸습니다.")
+            
             draw_stamp_board("모건", m_stamps)
             st.divider()
             draw_stamp_board("모하", h_stamps)
+        
+        else:
+            # 관리자 모드 켜졌을 때
+            st.success("🔓 도장 관리 모드가 활성화되었습니다. 동그라미를 마구 클릭해도 로딩이 걸리지 않습니다!")
+            
+            draw_interactive_stamp_board("모건", st.session_state.edit_m_stamps)
+            st.divider()
+            draw_interactive_stamp_board("모하", st.session_state.edit_h_stamps)
+            
+            # [수정] 한 번에 구글 시트로 보내는 저장 버튼 & 나가기 버튼 신설
+            st.divider()
+            col_save, col_exit = st.columns(2)
+            
+            with col_save:
+                if st.button("💾 변경된 도장 저장하기", type="primary", use_container_width=True):
+                    diff_m = st.session_state.edit_m_stamps - m_stamps
+                    diff_h = st.session_state.edit_h_stamps - h_stamps
+                    
+                    rows_to_add = []
+                    now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
+                    if diff_m != 0:
+                        rows_to_add.append(["모건", now, "🌟 칭찬도장", diff_m])
+                    if diff_h != 0:
+                        rows_to_add.append(["모하", now, "🌟 칭찬도장", diff_h])
+                    
+                    if rows_to_add:
+                        history_sheet.append_rows(rows_to_add)
+                    
+                    st.session_state.admin_mode = False
+                    st.success("✅ 구글 시트에 안전하게 저장되었습니다!")
+                    st.rerun()
+            
+            with col_exit:
+                if st.button("🚪 일반 모드로 나가기", use_container_width=True):
+                    st.session_state.admin_mode = False
+                    st.rerun()
 
     with tab4:
         st.subheader("⚙️ 미션 및 보상 관리")
