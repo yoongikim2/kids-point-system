@@ -20,16 +20,13 @@ st.markdown("""
 
 st.markdown('<p class="main-title">🌱 모건&모하의 성장 미션!</p>', unsafe_allow_html=True)
 
-# 한국 시간(KST) 설정
 KST = timezone(timedelta(hours=9))
 
-# 응원 문구 관리
 if 'm_msg' not in st.session_state:
     love_msgs = ["사랑해", "너무 사랑해", "오늘도 할수 있어!", "난 멋지니깐!", "규칙을 잘지키자!", "우리집은 내가 지킨다!", "스스로 하는 멋진 나!"]
     st.session_state.m_msg = f"모건, {random.choice(love_msgs)}"
     st.session_state.h_msg = f"모하, {random.choice(love_msgs)}"
 
-# [최적화 1] 구글 로그인 정보 캐싱 (매번 로그인 안 함)
 @st.cache_resource
 def get_gspread_client():
     creds_info = st.secrets["gspread_service_account"]
@@ -46,14 +43,16 @@ try:
     history_sheet = sh.worksheet("history")
     rewards_sheet = sh.worksheet("rewards")
 
-    # [최적화 2] 규칙과 보상은 10분 동안 메모리에 기억 (API 초과 방지)
     @st.cache_data(ttl=600)
     def load_base_data():
         return pd.DataFrame(rules_sheet.get_all_records()), pd.DataFrame(rewards_sheet.get_all_records())
 
     rules_df, rewards_df = load_base_data()
-    # 기록은 실시간으로 보여야 하므로 매번 불러옴 (이거 1번은 괜찮습니다!)
     history_df = pd.DataFrame(history_sheet.get_all_records())
+
+    # [수정 1] rules_df에 '이모티콘' 열이 없으면 기본값(⭐)으로 만들어줍니다.
+    if '이모티콘' not in rules_df.columns:
+        rules_df.insert(0, '이모티콘', '⭐')
 
     if '메달종류' not in rewards_df.columns:
         rewards_df['메달종류'] = '금메달'
@@ -90,12 +89,10 @@ try:
 
     st.divider()
 
-    # [최적화 3] 불필요한 구글 시트 재호출 제거
     def save_log(name, p, r):
         now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
         history_sheet.append_row([name, now, r, int(p)])
         
-        # 구글 시트를 다시 부르지 않고 가상의 데이터로 계산하여 속도/API 절약
         new_row = pd.DataFrame([[name, now, r, int(p), today_str]], columns=['이름', '일시', '규칙/보상명', '변동 점수', '날짜'])
         updated_history = pd.concat([history_df, new_row], ignore_index=True)
         
@@ -121,20 +118,6 @@ try:
                 st.session_state[f'{kid}_medal_popup'] = False
                 st.rerun()
 
-    def get_emoji_for_rule(rule_name):
-        name = str(rule_name)
-        if "기상" in name or "아침" in name: return "⏰"
-        if "씻고" in name or "옷" in name: return "👕"
-        if "갈 준비" in name: return "🏃‍♂️"
-        if "시계" in name or "물통" in name or "물건" in name: return "🎒"
-        if "태권도" in name and "시간" in name: return "🥋"
-        if "귀가" in name or "끝나고" in name: return "🏠"
-        if "식사" in name or "밥" in name: return "🍽️"
-        if "예쁜 말" in name or "이야기" in name: return "💖"
-        if "숙제" in name or "공부" in name: return "📚"
-        if "잠자기" in name or "밤" in name: return "🌙"
-        return "⭐"
-
     tab1, tab2, tab3, tab4 = st.tabs(["🚀 미션", "🎁 보상", "💮 도장판", "⚙️ 설정"])
 
     with tab1:
@@ -146,7 +129,11 @@ try:
             m_act = history_df[(history_df['이름'] == "모건") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])] if not history_df.empty else pd.DataFrame()
             h_act = history_df[(history_df['이름'] == "모하") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])] if not history_df.empty else pd.DataFrame()
             
-            with st.expander(f"{get_emoji_for_rule(row['규칙명'])} {row['규칙명']}"):
+            # [수정 2] 사용자가 직접 설정한 이모티콘을 불러옵니다.
+            emoji = str(row.get('이모티콘', '⭐')).strip()
+            if not emoji: emoji = '⭐'
+            
+            with st.expander(f"{emoji} {row['규칙명']}"):
                 st.write("👦 **모건**")
                 m_c1, m_c2 = st.columns(2)
                 if not m_act.empty:
@@ -204,18 +191,18 @@ try:
         st.divider()
         draw_stamp_board("모하", h_stamps)
 
-    # [최적화 4] 설정 탭에 Form(폼) 기능 추가 (글자 칠 때마다 서버 요동치는 것 방지)
     with tab4:
         st.subheader("⚙️ 미션 및 보상 관리")
         st.write("표를 수정하고 반드시 **[저장하기]** 버튼을 눌러야 반영됩니다.")
         
         with st.form("rule_form"):
             st.markdown("##### 📝 오늘의 규칙(미션) 수정")
+            st.caption("💡 '이모티콘' 칸에 원하는 이모티콘을 넣으세요. 비워두면 ⭐로 표시됩니다.")
             edited_rules = st.data_editor(rules_df, num_rows="dynamic", use_container_width=True)
             if st.form_submit_button("미션 저장하기", type="primary"):
                 rules_sheet.clear()
                 rules_sheet.append_rows([edited_rules.columns.values.tolist()] + edited_rules.values.tolist())
-                load_base_data.clear() # 캐시 지우기 (새로운 정보 불러오도록)
+                load_base_data.clear() 
                 st.success("✅ 미션이 성공적으로 업데이트되었습니다!")
                 st.rerun()
 
@@ -228,7 +215,7 @@ try:
             if st.form_submit_button("보상 저장하기", type="primary"):
                 rewards_sheet.clear()
                 rewards_sheet.append_rows([edited_rewards.columns.values.tolist()] + edited_rewards.values.tolist())
-                load_base_data.clear() # 캐시 지우기
+                load_base_data.clear()
                 st.success("✅ 보상이 성공적으로 업데이트되었습니다!")
                 st.rerun()
 
