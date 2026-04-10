@@ -88,6 +88,7 @@ try:
 
     st.divider()
 
+    # 미션/보상용 자동 기록 함수
     def save_log(name, p, r):
         now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
         history_sheet.append_row([name, now, r, int(p)])
@@ -97,10 +98,9 @@ try:
         
         today_actions = updated_history[(updated_history['이름'] == name) & (updated_history['날짜'] == today_str)]
         success_count = len(today_actions[today_actions['변동 점수'] > 0])
-        fail_count = len(today_actions[today_actions['변동 점수'] < 0])
         already_got_medal = not today_actions[today_actions['규칙/보상명'] == "🥇 금메달 획득"].empty
 
-        if success_count == total_rules_count and fail_count == 0 and not already_got_medal:
+        if success_count == total_rules_count and not already_got_medal:
             history_sheet.append_rows([
                 [name, now, "🥇 금메달 획득", 1],
                 [name, now, "🌟 칭찬도장", 3]
@@ -108,6 +108,12 @@ try:
             st.balloons()
             st.session_state[f'{name}_medal_popup'] = True
         
+        st.rerun()
+
+    # 수동 도장 클릭용 전용 함수
+    def save_manual_stamp(name, amount):
+        now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
+        history_sheet.append_row([name, now, "🌟 칭찬도장", int(amount)])
         st.rerun()
 
     for kid in ["모건", "모하"]:
@@ -132,28 +138,19 @@ try:
             if not emoji: emoji = '⭐'
             
             with st.expander(f"{emoji} {row['규칙명']}"):
-                # --- 모건 버튼 구역 ---
                 st.write("👦 **모건**")
-                m_c1, m_c2 = st.columns(2)
                 if not m_act.empty:
-                    # 완료 상태일 때의 버튼 텍스트도 직관적으로 변경
-                    m_label = "🟢 성공 (완료)" if m_act.iloc[0]['변동 점수'] > 0 else "❌ 실패 (기록됨)"
-                    m_c1.button(m_label, key=f"m_d_{i}", disabled=True)
+                    st.button("✨ 참 잘했어요! (완료)", key=f"m_d_{i}", disabled=True, use_container_width=True)
                 else:
-                    # [수정] 성공은 초록 동그라미, 실패는 빨간 엑스!
-                    if m_c1.button("🟢 성공", key=f"m_s_{i}"): save_log("모건", 1, row['규칙명'])
-                    if m_c2.button("❌ 실패", key=f"m_f_{i}"): save_log("모건", -1, row['규칙명'])
+                    if st.button("🟢 미션 성공!", key=f"m_s_{i}", use_container_width=True): 
+                        save_log("모건", 1, row['규칙명'])
                 
-                # --- 모하 버튼 구역 ---
                 st.write("🧒 **모하**")
-                h_c1, h_c2 = st.columns(2)
                 if not h_act.empty:
-                    h_label = "🟢 성공 (완료)" if h_act.iloc[0]['변동 점수'] > 0 else "❌ 실패 (기록됨)"
-                    h_c1.button(h_label, key=f"h_d_{i}", disabled=True)
+                    st.button("✨ 참 잘했어요! (완료)", key=f"h_d_{i}", disabled=True, use_container_width=True)
                 else:
-                    # [수정] 성공은 초록 동그라미, 실패는 빨간 엑스!
-                    if h_c1.button("🟢 성공", key=f"h_s_{i}"): save_log("모하", 1, row['규칙명'])
-                    if h_c2.button("❌ 실패", key=f"h_f_{i}"): save_log("모하", -1, row['규칙명'])
+                    if st.button("🟢 미션 성공!", key=f"h_s_{i}", use_container_width=True): 
+                        save_log("모하", 1, row['규칙명'])
 
     with tab2:
         st.subheader("🛒 금메달 & 다이아몬드 샵")
@@ -178,6 +175,16 @@ try:
                     save_log("모하", -needed, f"[보상] {row['보상명']}{suffix}")
 
     with tab3:
+        st.info("💡 10개 미션을 모두 완료하면 도장 3개를 받아요! 30개를 모으면 💎 다이아몬드로 자동 변환됩니다.")
+        
+        # --- 🔒 관리자용 비밀번호 입력 ---
+        with st.expander("🔒 도장 수동 관리 (부모님 전용)"):
+            pwd = st.text_input("비밀번호 입력", type="password", key="stamp_pwd")
+            is_admin = (pwd == "0507")
+            if pwd and not is_admin:
+                st.error("비밀번호가 틀렸습니다.")
+
+        # --- 일반 모드 도장판 (클릭 불가) ---
         def draw_stamp_board(name, current_stamps):
             st.markdown(f"#### {'👦' if name=='모건' else '🧒'} {name}의 칭찬도장판 ({current_stamps}/30)")
             st.progress(current_stamps / 30)
@@ -191,10 +198,36 @@ try:
             grid_html += "</div>"
             st.markdown(grid_html, unsafe_allow_html=True)
 
-        st.info("💡 10개 미션을 모두 완료하면 도장 3개를 받아요! 30개를 모으면 💎 다이아몬드로 자동 변환됩니다.")
-        draw_stamp_board("모건", m_stamps)
-        st.divider()
-        draw_stamp_board("모하", h_stamps)
+        # --- 관리자 모드 도장판 (클릭 가능) ---
+        def draw_interactive_stamp_board(name, current_stamps):
+            st.markdown(f"#### 🛠️ {'👦' if name=='모건' else '🧒'} {name}의 칭찬도장판 ({current_stamps}/30) - 수정 모드")
+            st.progress(current_stamps / 30)
+            
+            # 6줄 x 5칸 버튼 그리드 생성
+            for r in range(6):
+                cols = st.columns(5)
+                for c in range(5):
+                    idx = r * 5 + c
+                    with cols[c]:
+                        if idx < current_stamps:
+                            # 칠해진 도장 (누르면 삭제)
+                            if st.button("💮", key=f"rm_{name}_{idx}", help="클릭하여 도장 삭제"):
+                                save_manual_stamp(name, -1)
+                        else:
+                            # 빈 도장 (누르면 추가)
+                            if st.button("⚪", key=f"add_{name}_{idx}", help="클릭하여 도장 추가"):
+                                save_manual_stamp(name, 1)
+            st.markdown("<br>", unsafe_allow_html=True)
+
+        if is_admin:
+            st.success("🔓 도장 관리 모드가 활성화되었습니다. 동그라미를 클릭해서 도장을 찍거나 지울 수 있습니다.")
+            draw_interactive_stamp_board("모건", m_stamps)
+            st.divider()
+            draw_interactive_stamp_board("모하", h_stamps)
+        else:
+            draw_stamp_board("모건", m_stamps)
+            st.divider()
+            draw_stamp_board("모하", h_stamps)
 
     with tab4:
         st.subheader("⚙️ 미션 및 보상 관리")
