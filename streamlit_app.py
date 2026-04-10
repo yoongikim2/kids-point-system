@@ -50,7 +50,6 @@ try:
     rules_df, rewards_df = load_base_data()
     history_df = pd.DataFrame(history_sheet.get_all_records())
 
-    # [수정 1] rules_df에 '이모티콘' 열이 없으면 기본값(⭐)으로 만들어줍니다.
     if '이모티콘' not in rules_df.columns:
         rules_df.insert(0, '이모티콘', '⭐')
 
@@ -129,26 +128,32 @@ try:
             m_act = history_df[(history_df['이름'] == "모건") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])] if not history_df.empty else pd.DataFrame()
             h_act = history_df[(history_df['이름'] == "모하") & (history_df['날짜'] == today_str) & (history_df['규칙/보상명'] == row['규칙명'])] if not history_df.empty else pd.DataFrame()
             
-            # [수정 2] 사용자가 직접 설정한 이모티콘을 불러옵니다.
             emoji = str(row.get('이모티콘', '⭐')).strip()
             if not emoji: emoji = '⭐'
             
             with st.expander(f"{emoji} {row['규칙명']}"):
+                # --- 모건 버튼 구역 ---
                 st.write("👦 **모건**")
                 m_c1, m_c2 = st.columns(2)
                 if not m_act.empty:
-                    m_c1.button("완료 ✅" if m_act.iloc[0]['변동 점수'] > 0 else "실패 ❌", key=f"m_d_{i}", disabled=True)
+                    # 완료 상태일 때의 버튼 텍스트도 직관적으로 변경
+                    m_label = "🟢 성공 (완료)" if m_act.iloc[0]['변동 점수'] > 0 else "❌ 실패 (기록됨)"
+                    m_c1.button(m_label, key=f"m_d_{i}", disabled=True)
                 else:
-                    if m_c1.button("성공", key=f"m_s_{i}"): save_log("모건", 1, row['규칙명'])
-                    if m_c2.button("실패", key=f"m_f_{i}"): save_log("모건", -1, row['규칙명'])
+                    # [수정] 성공은 초록 동그라미, 실패는 빨간 엑스!
+                    if m_c1.button("🟢 성공", key=f"m_s_{i}"): save_log("모건", 1, row['규칙명'])
+                    if m_c2.button("❌ 실패", key=f"m_f_{i}"): save_log("모건", -1, row['규칙명'])
                 
+                # --- 모하 버튼 구역 ---
                 st.write("🧒 **모하**")
                 h_c1, h_c2 = st.columns(2)
                 if not h_act.empty:
-                    h_c1.button("완료 ✅" if h_act.iloc[0]['변동 점수'] > 0 else "실패 ❌", key=f"h_d_{i}", disabled=True)
+                    h_label = "🟢 성공 (완료)" if h_act.iloc[0]['변동 점수'] > 0 else "❌ 실패 (기록됨)"
+                    h_c1.button(h_label, key=f"h_d_{i}", disabled=True)
                 else:
-                    if h_c1.button("성공", key=f"h_s_{i}"): save_log("모하", 1, row['규칙명'])
-                    if h_c2.button("실패", key=f"h_f_{i}"): save_log("모하", -1, row['규칙명'])
+                    # [수정] 성공은 초록 동그라미, 실패는 빨간 엑스!
+                    if h_c1.button("🟢 성공", key=f"h_s_{i}"): save_log("모하", 1, row['규칙명'])
+                    if h_c2.button("❌ 실패", key=f"h_f_{i}"): save_log("모하", -1, row['규칙명'])
 
     with tab2:
         st.subheader("🛒 금메달 & 다이아몬드 샵")
