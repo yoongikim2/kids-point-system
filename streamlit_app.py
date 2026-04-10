@@ -47,7 +47,6 @@ try:
     def load_base_data():
         return pd.DataFrame(rules_sheet.get_all_records()), pd.DataFrame(rewards_sheet.get_all_records())
 
-    # [핵심 수정 1] 기록(history) 데이터도 화면 새로고침할 때마다 부르지 않고 기억하게 만듭니다!
     @st.cache_data(ttl=600)
     def load_history_data():
         return pd.DataFrame(history_sheet.get_all_records())
@@ -112,14 +111,17 @@ try:
             st.balloons()
             st.session_state[f'{name}_medal_popup'] = True
         
-        # [핵심 수정 2] 시트에 뭔가 저장하고 나면, 기억(캐시)을 비워서 최신 정보를 가져오게 합니다.
         load_history_data.clear()
         st.rerun()
 
     for kid in ["모건", "모하"]:
         if st.session_state.get(f'{kid}_medal_popup'):
-            st.success(f"🎊 대박! {kid}이가 오늘 모든 미션을 성공했어요!\n\n**🥇 금메달 1개 + 🌟 칭찬도장 3개 획득!**")
-            if st.button(f"{kid}아, 축하해! (닫기)"):
+            # [자연스러운 호칭 패치 적용 완료!]
+            josa_ga = "이가" if kid == "모건" else "가"
+            josa_ya = "아" if kid == "모건" else "야"
+            
+            st.success(f"🎊 대박! {kid}{josa_ga} 오늘 모든 미션을 성공했어요!\n\n**🥇 금메달 1개 + 🌟 칭찬도장 3개 획득!**")
+            if st.button(f"{kid}{josa_ya}, 축하해! (닫기)"):
                 st.session_state[f'{kid}_medal_popup'] = False
                 st.rerun()
 
@@ -251,7 +253,6 @@ try:
                     
                     if rows_to_add:
                         history_sheet.append_rows(rows_to_add)
-                        # [핵심 수정 3] 저장 완료 시 캐시 지우기
                         load_history_data.clear()
                     
                     st.session_state.admin_mode = False
